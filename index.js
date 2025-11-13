@@ -1,14 +1,15 @@
 import express from "express";
 import mercadopago from "mercadopago";
 import cors from "cors";
+import axios from "axios";
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ✅ Configuração do Mercado Pago
+// ✅ Configuração inicial do Mercado Pago (token padrão)
 mercadopago.configure({
-  access_token: process.env.MP_ACCESS_TOKEN, // Defina essa variável no Render
+  access_token: process.env.MP_ACCESS_TOKEN, // Defina no Render → Environment Variables
 });
 
 // ✅ Endpoint para gerar PIX
@@ -81,41 +82,50 @@ app.post("/api/mercadoPagoCreatePix", async (req, res) => {
   }
 });
 
-// ✅ Endpoint para consultar status do pagamento (usado pelo Base44)
+// ✅ Endpoint para consultar status do pagamento (para o Base44)
 app.post("/api/checkPaymentStatus", async (req, res) => {
   try {
-    const { payment_id } = req.body;
-    if (!payment_id) {
+    const { paymentId, accessToken } = req.body;
+
+    if (!paymentId) {
       return res.status(400).json({
         success: false,
-        message: "payment_id é obrigatório",
+        message: "paymentId é obrigatório",
       });
     }
 
-    console.log("🔍 Consultando status do pagamento no Mercado Pago:", payment_id);
+    console.log("🔍 Consultando status do pagamento no Mercado Pago:", paymentId);
 
-    const payment = await mercadopago.payment.findById(payment_id);
+    // Usa o token enviado ou o token padrão configurado
+    const token = accessToken || process.env.MP_ACCESS_TOKEN;
 
-    if (!payment || !payment.id) {
-      console.warn("⚠️ Pagamento não encontrado:", payment_id);
-      return res.status(404).json({
-        success: false,
-        message: "Pagamento não encontrado",
-      });
-    }
+    // Consulta direta na API oficial do Mercado Pago (mais confiável que SDK)
+    const mpResponse = await axios.get(
+      `https://api.mercadopago.com/v1/payments/${paymentId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = mpResponse.data;
+
+    console.log("📊 Status retornado pelo Mercado Pago:", data.status);
 
     res.status(200).json({
       success: true,
-      id: payment.id,
-      status: payment.status,
-      status_detail: payment.status_detail,
-      date_approved: payment.date_approved,
+      payment_id: data.id,
+      status: data.status,
+      status_detail: data.status_detail,
+      date_approved: data.date_approved,
+      transaction_amount: data.transaction_amount,
     });
   } catch (error) {
-    console.error("❌ Erro ao verificar status:", error);
-    res.status(500).json({
+    console.error("❌ Erro ao verificar status:", error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
       success: false,
-      message: error.message,
+      message: error.response?.data || error.message,
     });
   }
 });
@@ -127,6 +137,4 @@ app.get("/", (req, res) => {
 
 // ✅ Inicializa servidor
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () =>
-  console.log(`✅ Servidor rodando na porta ${PORT}`)
-);
+app.listen(PORT, () => console.log(`✅ Servidor rodando na porta ${PORT}`));
