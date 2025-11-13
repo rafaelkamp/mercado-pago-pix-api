@@ -112,17 +112,17 @@ app.post("/api/webhook", async (req, res) => {
     console.log("🔎 Detalhes do pagamento:", payment.status);
 
     // ✅ Atualiza status no Base44 via API REST
-    const updateResponse = await fetch("https://api.base44.com/entities/Payment/update", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.BASE44_API_KEY}`,
-      },
-      body: JSON.stringify({
-        filter: { transaction_id: String(paymentId) },
-        update: { status: payment.status === "approved" ? "completed" : payment.status },
-      }),
-    });
+const updateResponse = await fetch("https://app.base44.com/api/apps/68f0f736d119a95c992109cf/entities/Payment/update", {
+  method: "PUT",
+  headers: {
+    "Content-Type": "application/json",
+    "api_key": process.env.BASE44_API_KEY, // 🔥 CORRIGIDO
+  },
+  body: JSON.stringify({
+    filter: { transaction_id: String(paymentId) },
+    update: { status: payment.status === "approved" ? "completed" : payment.status },
+  }),
+});
 
     if (!updateResponse.ok) {
       const text = await updateResponse.text();
