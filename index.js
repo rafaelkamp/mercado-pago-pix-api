@@ -7,7 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ✅ Configuração inicial do Mercado Pago (token padrão)
+// ✅ Configuração inicial do Mercado Pago
 mercadopago.configure({
   access_token: process.env.MP_ACCESS_TOKEN, // Defina no Render → Environment Variables
 });
@@ -42,7 +42,8 @@ app.post("/api/mercadoPagoCreatePix", async (req, res) => {
         first_name: payer?.first_name || "Usuário",
         last_name: payer?.last_name || "Base44",
       },
-      notification_url: "https://api.base44.com/webhooks/mercadopago/68f0f736d119a95c992109cf", // 👈 Webhook oficial do Base44
+      notification_url:
+        "https://api.base44.com/webhooks/mercadopago/68f0f736d119a95c992109cf", // Webhook do Base44
     });
 
     const poi =
@@ -63,10 +64,7 @@ app.post("/api/mercadoPagoCreatePix", async (req, res) => {
     res.status(200).json({
       success: true,
       payment_id:
-        payment.id ||
-        payment.response?.id ||
-        payment.body?.id ||
-        null,
+        payment.id || payment.response?.id || payment.body?.id || null,
       qr_code: txData.qr_code,
       qr_code_base64: txData.qr_code_base64,
       amount: payment.transaction_amount || amount,
@@ -82,24 +80,22 @@ app.post("/api/mercadoPagoCreatePix", async (req, res) => {
   }
 });
 
-// ✅ Endpoint para consultar status do pagamento (para o Base44)
+// ✅ Endpoint para consultar status do pagamento (Base44 / Front)
 app.post("/api/checkPaymentStatus", async (req, res) => {
   try {
-    const { paymentId, accessToken } = req.body;
+    // 🔧 Compatível com payment_id OU paymentId
+    const paymentId = req.body.payment_id || req.body.paymentId;
+    const token = req.body.accessToken || process.env.MP_ACCESS_TOKEN;
 
     if (!paymentId) {
       return res.status(400).json({
         success: false,
-        message: "paymentId é obrigatório",
+        message: "payment_id é obrigatório",
       });
     }
 
-    console.log("🔍 Consultando status do pagamento no Mercado Pago:", paymentId);
+    console.log("🔍 Consultando status do pagamento:", paymentId);
 
-    // Usa o token enviado ou o token padrão configurado
-    const token = accessToken || process.env.MP_ACCESS_TOKEN;
-
-    // Consulta direta na API oficial do Mercado Pago (mais confiável que SDK)
     const mpResponse = await axios.get(
       `https://api.mercadopago.com/v1/payments/${paymentId}`,
       {
@@ -111,7 +107,7 @@ app.post("/api/checkPaymentStatus", async (req, res) => {
 
     const data = mpResponse.data;
 
-    console.log("📊 Status retornado pelo Mercado Pago:", data.status);
+    console.log("📊 Status retornado:", data.status);
 
     res.status(200).json({
       success: true,
@@ -122,10 +118,11 @@ app.post("/api/checkPaymentStatus", async (req, res) => {
       transaction_amount: data.transaction_amount,
     });
   } catch (error) {
-    console.error("❌ Erro ao verificar status:", error.response?.data || error.message);
+    const err = error.response?.data || error.message;
+    console.error("❌ Erro ao verificar status:", err);
     res.status(error.response?.status || 500).json({
       success: false,
-      message: error.response?.data || error.message,
+      message: err,
     });
   }
 });
